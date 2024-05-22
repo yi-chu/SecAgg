@@ -5,6 +5,11 @@ opacus==1.1.1
 scikit_learn==1.2.1
 scipy==1.10.1
 six==1.16.0
+py_diffie_hellman==1.0.1
+pycryptodomex==3.12.0
+rsa==4.8
+tqdm==4.62.3
+git+https://github.com/blockstack/secret-sharing
 
 # for CUDA 11.6 torch on Linux
 --find-links https://download.pytorch.org/whl/cu116; sys_platform == "linux"
