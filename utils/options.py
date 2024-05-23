@@ -38,7 +38,10 @@ def args_parser():
 
     parser.add_argument('--serial', action='store_true', help='partial serial running to save the gpu memory')
     parser.add_argument('--serial_bs', type=int, default=128, help='partial serial running batch size')
+    
     parser.add_argument('--drop_out', type=float, default=0, help='the rate of offline clients')
+    parser.add_argument('--k', type=float, default=0.5, help="The proportion of clients colluding with the server")
+
 
     args = parser.parse_args()
     return args

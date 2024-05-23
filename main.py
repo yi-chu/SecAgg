@@ -167,23 +167,6 @@ def unmasking(shape: tuple) -> np.ndarray:
         return None
 
 if __name__ == '__main__':
-    # init logger
-    logger = logging.getLogger("my_logger")
-    logger.setLevel(logging.INFO)
-
-    # handler for file
-    fh = logging.FileHandler('test.log')
-    fh.setLevel(logging.INFO)
-
-    # set formatter
-    formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s')
-
-    # add formatter
-    fh.setFormatter(formatter)
-
-    # add handler
-    logger.addHandler(fh)
-
     # parse args
     random.seed(123)
     np.random.seed(123)
@@ -195,6 +178,31 @@ if __name__ == '__main__':
     args.device = torch.device('cuda:{}'.format(args.gpu) if torch.cuda.is_available() and args.gpu != -1 else 'cpu')
     dict_users = {}
     dataset_train, dataset_test = None, None
+
+    # init logger
+    logger = logging.getLogger("my_logger")
+    logger.setLevel(logging.INFO)
+
+    # handler for file
+    fh = logging.FileHandler('./log/log_{}_{}_{}_iid{}_dp_{}_epsilon_{}_k_{}_drop_{}_{}'.format(args.dataset, 
+                                                                                                args.model, 
+                                                                                                args.epochs, 
+                                                                                                args.iid, 
+                                                                                                args.dp_mechanism, 
+                                                                                                args.dp_epsilon, 
+                                                                                                args.k, 
+                                                                                                args.drop_out, 
+                                                                                                args.num_users))
+    fh.setLevel(logging.INFO)
+
+    # set formatter
+    formatter = logging.Formatter('%(asctime)s - [%(levelname)s] - %(message)s')
+
+    # add formatter
+    fh.setFormatter(formatter)
+
+    # add handler
+    logger.addHandler(fh)
 
     # load dataset and split users
     if args.dataset == 'mnist':
@@ -395,7 +403,11 @@ if __name__ == '__main__':
             U_2 = [str(i) for i in idxs_users]
 
         # local model train
-        for u in U_2:
+
+        # dropout 
+        U_3 = sorted(random.sample(U_2, int(len(U_2)*(1 - args.drop_out))))
+
+        for u in U_3:
             w, loss = clients[int(u)].update.train(net=copy.deepcopy(net_glob).to(args.device))
             w_locals.append(copy.deepcopy(w))
             loss_locals.append(copy.deepcopy(loss))
@@ -411,18 +423,16 @@ if __name__ == '__main__':
                 server.download(data)
         
         logger.info("mask gradients finished")
+        logger.info("U_3 users: " + ','.join(U_3))
 
         # unmasking weights
         if args.protocol == "SecAgg":
-            print("clinets num:", int(len(server.mask_handler.U_3)*(1 - args.drop_out)))
-            server.mask_handler.U_3 = sorted(random.sample(server.mask_handler.U_3, int(len(server.mask_handler.U_3)*(1 - args.drop_out))))
-            U_3 = server.mask_handler.U_3
-            print("U_3: ", U_3)
-            for u in U_3:
-                clients[int(u)].U_3 = U_3
+            U_4 = server.mask_handler.U_3
+            for u in U_4:
+                clients[int(u)].U_3 = U_4
 
 
-            for u in U_3:
+            for u in U_4:
                 data = clients[int(u)].unmask_gradients()
                 server.unmask_handler.handle(data)
                 clients[int(u)].upload(data)
@@ -432,7 +442,7 @@ if __name__ == '__main__':
             for k,v in w.items():
                 weights[k] = net_glob.state_dict()[k].numpy()
             
-            cProfile.run('server.unmask(weights)')
+            # cProfile.run('server.unmask(weights)')
             new_weights = server.unmask(weights)
             
             w_glob = dict()
@@ -442,7 +452,7 @@ if __name__ == '__main__':
             net_glob.load_state_dict(w_glob)
 
         logger.info("unmask gradients finished")
-        logger.info("U_3 users: " + ','.join(U_3))
+        logger.info("U_4 users: " + ','.join(U_4))
 
         # # update global weights
         # w_glob = FedWeightAvg(w_locals, weight_locols)
@@ -454,6 +464,12 @@ if __name__ == '__main__':
         acc_t, loss_t = test_img(net_glob, dataset_test, args)
         t_end = time.time()
         logger.info("Round {:3d},Testing accuracy: {:.2f},Time:  {:.2f}s".format(iter, acc_t, t_end - t_start))
+        data_upload = server.uploaded
+        data_download = server.downloaded
+        for id in idxs_users:
+            data_upload += clients[id].uploaded
+            data_download += clients[id].downloaded
+        logger.info("upload: {}, download: {}".format(data_upload, data_download))
 
         acc_test.append(acc_t.item())
 
